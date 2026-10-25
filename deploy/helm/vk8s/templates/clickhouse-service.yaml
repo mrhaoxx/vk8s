@@ -1,0 +1,21 @@
+{{- if and .Values.audit.enabled .Values.audit.clickhouse.deploy }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: vk8s-clickhouse
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "vk8s.selectorLabels" (dict "component" "clickhouse" "root" .) | nindent 4 }}
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http
+    - name: native
+      port: 9000
+      targetPort: native
+{{- end }}

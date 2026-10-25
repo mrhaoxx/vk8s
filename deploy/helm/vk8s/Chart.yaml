@@ -1,0 +1,18 @@
+apiVersion: v2
+name: vk8s
+description: 多用户隔离的虚拟 Kubernetes 开发环境平台：manager、gateway、CRD 与平台配置
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.29.0-0"
+keywords:
+  - kubernetes
+  - vcluster
+  - multi-tenancy
+  - developer-platform
+home: https://github.com/corp/vk8s
+sources:
+  - https://github.com/corp/vk8s
+annotations:
+  # CRD 放在 crds/ 目录：helm install 时安装，helm upgrade 不会更新；升级请 kubectl apply -f crds/
+  vk8s.io/crd-install-note: "crds/ are installed once by Helm; re-apply manually on upgrade"

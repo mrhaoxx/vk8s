@@ -1,0 +1,110 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: users.vk8s.io
+spec:
+  group: vk8s.io
+  names:
+    kind: User
+    listKind: UserList
+    plural: users
+    singular: user
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.role
+      name: Role
+      type: string
+    - jsonPath: .spec.disabled
+      name: Disabled
+      type: boolean
+    - jsonPath: .spec.email
+      name: Email
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: User 平台用户。
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: UserSpec 用户定义。metadata.name 即登录名。
+            properties:
+              auth:
+                description: UserAuth 两种登录方式可同时存在。
+                properties:
+                  oidc:
+                    description: OIDCAuth OIDC 身份；issuer 来自平台配置。
+                    properties:
+                      subject:
+                        type: string
+                    required:
+                    - subject
+                    type: object
+                  static:
+                    description: StaticAuth 静态账号：密码 bcrypt 哈希存放在 vk8s-system 的 Secret
+                      中，key 为 "bcrypt"。
+                    properties:
+                      passwordSecretRef:
+                        description: |-
+                          LocalObjectReference contains enough information to let you locate the
+                          referenced object inside the same namespace.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                    required:
+                    - passwordSecretRef
+                    type: object
+                type: object
+              disabled:
+                type: boolean
+              displayName:
+                type: string
+              email:
+                type: string
+              role:
+                description: UserRole 平台角色。
+                type: string
+            required:
+            - role
+            type: object
+          status:
+            description: UserStatus 用户状态。
+            properties:
+              lastLoginTime:
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

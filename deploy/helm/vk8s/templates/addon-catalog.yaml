@@ -1,0 +1,11 @@
+{{- range .Values.addons.catalog }}
+---
+apiVersion: vk8s.io/v1alpha1
+kind: AddonTemplate
+metadata:
+  name: {{ required "addons.catalog[].name is required" .name }}
+  labels:
+    {{- include "vk8s.labels" $ | nindent 4 }}
+spec:
+  {{- toYaml (required "addons.catalog[].spec is required" .spec) | nindent 2 }}
+{{- end }}

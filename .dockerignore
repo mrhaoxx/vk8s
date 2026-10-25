@@ -1,0 +1,9 @@
+.git
+.smoke
+bin/*
+!bin/linux
+docs
+web/node_modules
+web/dist
+internal/manager/ui/dist
+*.md

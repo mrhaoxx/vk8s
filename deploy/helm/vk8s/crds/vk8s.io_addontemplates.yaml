@@ -1,0 +1,217 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: addontemplates.vk8s.io
+spec:
+  group: vk8s.io
+  names:
+    kind: AddonTemplate
+    listKind: AddonTemplateList
+    plural: addontemplates
+    shortNames:
+    - addontpl
+    singular: addontemplate
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display
+      type: string
+    - jsonPath: .spec.chart.name
+      name: Chart
+      type: string
+    - jsonPath: .spec.chart.version
+      name: Version
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AddonTemplate 应用目录项。
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AddonTemplateSpec 目录项（管理员维护）。
+            properties:
+              category:
+                type: string
+              chart:
+                description: AddonChart 应用的 Helm chart。
+                properties:
+                  name:
+                    type: string
+                  pullSecretRef:
+                    description: PullSecretRef vk8s-system 内 kubernetes.io/dockerconfigjson
+                      类型的 Secret（私有仓库用）。
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  repository:
+                    description: Repository oci:// 或 https:// 仓库地址。
+                    type: string
+                  version:
+                    type: string
+                required:
+                - name
+                - repository
+                - version
+                type: object
+              deprecated:
+                description: Deprecated 目录里隐藏，已装的不受影响。
+                type: boolean
+              description:
+                type: string
+              displayName:
+                type: string
+              generate:
+                items:
+                  description: AddonGenerate 安装前由平台在虚拟集群里生成的 Secret（已存在则跳过）。
+                  properties:
+                    key:
+                      description: Key password 的键名，缺省 "password"。
+                      type: string
+                    kind:
+                      description: Kind sshKeyPair | password。
+                      type: string
+                    secret:
+                      description: NamespacedName 虚拟集群里的对象位置。
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      type: object
+                  required:
+                  - kind
+                  - secret
+                  type: object
+                type: array
+              inputs:
+                items:
+                  description: AddonInput 允许用户填写的参数，映射到 values 的点分路径。
+                  properties:
+                    default:
+                      type: string
+                    label:
+                      type: string
+                    name:
+                      type: string
+                    options:
+                      items:
+                        type: string
+                      type: array
+                    path:
+                      type: string
+                    required:
+                      type: boolean
+                    type:
+                      description: Type string | bool | enum | password。
+                      type: string
+                  required:
+                  - name
+                  - path
+                  - type
+                  type: object
+                type: array
+              namespace:
+                type: string
+              outputs:
+                items:
+                  description: AddonOutput 装好后展示的访问信息。
+                  properties:
+                    kind:
+                      description: Kind service | secret | url。
+                      type: string
+                    label:
+                      type: string
+                    name:
+                      type: string
+                    secret:
+                      description: AddonSecretRef 输出某个 Secret 的键（值只按需读取）。
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - key
+                      - name
+                      - namespace
+                      type: object
+                    service:
+                      description: AddonServiceRef 输出某个 Service 的地址。
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                        port:
+                          format: int32
+                          type: integer
+                      required:
+                      - name
+                      - namespace
+                      - port
+                      type: object
+                    url:
+                      description: URL Go text/template：.Cluster.Name、.Cluster.AppsDomain、.Outputs.<name>。
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  type: object
+                type: array
+              release:
+                type: string
+              requires:
+                description: AddonRequires 安装前提。
+                properties:
+                  podSecurity:
+                    description: PodSecurity 集群档位至少要这么宽松（privileged < baseline < restricted）。
+                    type: string
+                type: object
+              values:
+                description: Values 默认 values（YAML 文本）。
+                type: string
+            required:
+            - chart
+            - displayName
+            - namespace
+            - release
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}

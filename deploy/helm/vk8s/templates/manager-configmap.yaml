@@ -1,0 +1,77 @@
+# 平台配置：字段名与 internal/config.Config 的 json tag 一致。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vk8s-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+  {{- include "vk8s.annotations" . | nindent 2 }}
+data:
+  config.yaml: |
+    systemNamespace: {{ .Release.Namespace }}
+    image: {{ include "vk8s.image" . | quote }}
+    apiDomain: {{ required "apiDomain is required" .Values.apiDomain | quote }}
+    apiPort: {{ .Values.apiPort | default 443 }}
+    appsDomain: {{ required "appsDomain is required" .Values.appsDomain | quote }}
+    {{- if .Values.appsTLS.enabled }}
+    appsTLSSecret: {{ printf "%s/%s" .Release.Namespace .Values.appsTLS.secretName | quote }}
+    {{- end }}
+    hostServiceCIDR: {{ .Values.hostServiceCIDR | quote }}
+    hostPodCIDR: {{ .Values.hostPodCIDR | quote }}
+    hostDNSServiceIP: {{ .Values.hostDNSServiceIP | quote }}
+    ingressNamespaceSelector:
+      {{- toYaml .Values.ingressNamespaceSelector | nindent 6 }}
+    reservedNames:
+      {{- toYaml .Values.reservedNames | nindent 6 }}
+    auth:
+      sessionTTL: {{ .Values.auth.sessionTTL | quote }}
+      publicURL: {{ include "vk8s.publicURL" . | quote }}
+      {{- if .Values.auth.bootstrapAdmin.enabled }}
+      bootstrapAdmin:
+        username: {{ .Values.auth.bootstrapAdmin.username | quote }}
+        passwordSecretRef: {{ printf "%s/%s" .Release.Namespace (include "vk8s.bootstrapAdminSecretName" .) | quote }}
+      {{- end }}
+      {{- if .Values.auth.oidc.enabled }}
+      oidc:
+        issuer: {{ required "auth.oidc.issuer is required when oidc.enabled" .Values.auth.oidc.issuer | quote }}
+        clientID: {{ required "auth.oidc.clientID is required when oidc.enabled" .Values.auth.oidc.clientID | quote }}
+        clientSecretRef: {{ printf "%s/%s" .Release.Namespace (include "vk8s.oidcSecretName" .) | quote }}
+        usernameClaim: {{ .Values.auth.oidc.usernameClaim | quote }}
+        emailClaim: {{ .Values.auth.oidc.emailClaim | quote }}
+        scopes:
+          {{- toYaml .Values.auth.oidc.scopes | nindent 10 }}
+        autoCreateUsers: {{ .Values.auth.oidc.autoCreateUsers }}
+        allowedEmailDomains:
+          {{- toYaml .Values.auth.oidc.allowedEmailDomains | nindent 10 }}
+      {{- end }}
+    limits:
+      maxVClustersPerUser: {{ .Values.limits.maxVClustersPerUser }}
+      tokenDefaultTTL: {{ .Values.limits.tokenDefaultTTL | quote }}
+      tokenMaxTTL: {{ .Values.limits.tokenMaxTTL | quote }}
+    defaults:
+      {{- toYaml .Values.defaults | nindent 6 }}
+    controlPlanePlacement:
+      {{- toYaml .Values.controlPlanePlacement | nindent 6 }}
+    nodePlacementPresets:
+      {{- toYaml .Values.nodePlacementPresets | nindent 6 }}
+    limitRange:
+      {{- toYaml .Values.limitRange | nindent 6 }}
+    booking:
+      retention: {{ .Values.booking.retention | quote }}
+    addons:
+      jobTimeout: {{ .Values.addons.job.timeout | quote }}
+      jobResources:
+        {{- toYaml .Values.addons.job.resources | nindent 8 }}
+    audit:
+      enabled: {{ .Values.audit.enabled }}
+      retentionDays: {{ .Values.audit.retentionDays }}
+      clickhouse:
+        url: {{ include "vk8s.clickhouseURL" . | quote }}
+        database: {{ .Values.audit.clickhouse.database | quote }}
+        username: {{ .Values.audit.clickhouse.username | quote }}
+        {{- if and .Values.audit.enabled (not .Values.audit.clickhouse.deploy) (not .Values.audit.clickhouse.existingSecret) }}
+        {{- fail "audit.clickhouse.existingSecret is required when audit.enabled=true and audit.clickhouse.deploy=false" }}
+        {{- end }}
+        passwordSecretRef: {{ printf "%s/%s" .Release.Namespace (include "vk8s.clickhouseSecretName" .) | quote }}

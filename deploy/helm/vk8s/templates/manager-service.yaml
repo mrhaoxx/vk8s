@@ -1,0 +1,31 @@
+# 名字固定为 vk8s-manager：虚拟 apiserver 的 TokenReview webhook 回调
+# https://vk8s-manager.<ns>.svc:8443/webhook/tokenreview/<vc>
+apiVersion: v1
+kind: Service
+metadata:
+  name: vk8s-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+  {{- with .Values.manager.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.manager.service.type }}
+  selector:
+    {{- include "vk8s.selectorLabels" (dict "component" "manager" "root" .) | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 8443
+      targetPort: https
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP

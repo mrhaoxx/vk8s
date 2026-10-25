@@ -1,0 +1,40 @@
+# vk8s 虚拟 apiserver 的审计策略（设计文档 2026-10-24 审计 §3.1）。规则自上而下首个命中生效。
+apiVersion: audit.k8s.io/v1
+kind: Policy
+omitStages: ["RequestReceived"]
+rules:
+  # 1. 系统组件的只读流量不记（占流量绝大部分，没有审计价值）；它们的变更照记
+  - level: None
+    users: ["system:kube-controller-manager", "system:apiserver", "vk8s:syncer"]
+    verbs: ["get", "list", "watch"]
+  - level: None
+    userGroups: ["system:serviceaccounts:kube-system"]
+    verbs: ["get", "list", "watch"]
+  # 1b. 系统组件在 kube-system 里的 Lease 续期不记（apiserver 身份 Lease 每 10s 一次，纯噪音）；用户对 Lease 的操作照记
+  - level: None
+    users: ["system:kube-controller-manager", "system:apiserver", "vk8s:syncer"]
+    verbs: ["create", "update", "patch"]
+    namespaces: ["kube-system"]
+    resources:
+      - group: "coordination.k8s.io"
+        resources: ["leases"]
+  - level: None
+    userGroups: ["system:serviceaccounts:kube-system"]
+    verbs: ["create", "update", "patch"]
+    namespaces: ["kube-system"]
+    resources:
+      - group: "coordination.k8s.io"
+        resources: ["leases"]
+  # 2. 健康检查、版本、OpenAPI、API 发现（kubectl 每次调用都会打几十个）
+  - level: None
+    nonResourceURLs: ["/healthz*", "/readyz*", "/livez*", "/version*", "/openapi*", "/.well-known/*", "/api", "/api/*", "/apis", "/apis/*"]
+  # 3. 敏感资源无论什么动词都不记体
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: ["secrets", "configmaps", "serviceaccounts/token"]
+  # 4. 变更记请求体（exec / attach / portforward 是 create 子资源，体只有选项）
+  - level: Request
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+  # 5. 其余一切记元数据
+  - level: Metadata

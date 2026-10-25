@@ -1,0 +1,340 @@
+# vk8s Helm chart 配置。
+# 平台配置段（apiDomain … limitRange）会原样渲染进 ConfigMap vk8s-config 的 config.yaml，
+# 字段名与 internal/config.Config 的 json tag 一致。
+
+image:
+  repository: registry.corp.com/vk8s/vk8s
+  # 空 = Chart.appVersion
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+namespace:
+  # 由 chart 创建 Release namespace。通常用 `helm install --create-namespace` 代替，保持 false。
+  create: false
+  labels: {}
+
+# ---- 域名与入口 ----
+# kubectl 入口：*.<apiDomain> → gateway 的 LoadBalancer IP
+apiDomain: vk8s.corp.com
+# 用户从外部访问 <vc>.<apiDomain> 的端口，写进 kubeconfig 与 status.apiEndpoint；gateway 走 NodePort 时填映射后的端口
+apiPort: 443
+# 用户工作负载：*.<appsDomain> → 宿主 Ingress Controller 的 LB IP
+appsDomain: apps.vk8s.corp.com
+# 浏览器访问 UI 的地址（OIDC 回调也用它）。空 = https://console.<apiDomain>；manager.ingress.tls.enabled=false 时为 http://
+# https 时 session cookie 带 Secure，浏览器走 http 不会回传，所以 scheme 必须与实际访问方式一致
+publicURL: ""
+
+# ---- 宿主集群网络 ----
+# 必须与宿主一致；空 = manager 启动时自动探测
+hostServiceCIDR: ""
+hostPodCIDR: ""
+# 空 = kube-system/kube-dns 的 ClusterIP
+hostDNSServiceIP: ""
+# 非 privileged 集群的 NetworkPolicy 放行 Ingress Controller 所在 ns
+ingressNamespaceSelector:
+  kubernetes.io/metadata.name: ingress-nginx
+reservedNames:
+  - console
+  - api
+  - www
+
+# ---- 认证 ----
+auth:
+  sessionTTL: 24h
+  bootstrapAdmin:
+    enabled: true
+    username: admin
+    # 明文密码；空 = 首次安装随机生成并保存在 Secret 中（升级时复用已有值）
+    password: ""
+    # 已有 Secret（key: password）；设置后 chart 不再创建 Secret
+    existingSecret: ""
+  oidc:
+    enabled: false
+    issuer: ""
+    clientID: ""
+    # 明文 client secret；设置后 chart 创建 Secret（key: clientSecret）
+    clientSecret: ""
+    # 已有 Secret（key: clientSecret）；与 clientSecret 二选一
+    existingSecret: ""
+    usernameClaim: preferred_username
+    emailClaim: email
+    scopes:
+      - openid
+      - profile
+      - email
+    autoCreateUsers: true
+    allowedEmailDomains: []
+
+# ---- 平台上限 ----
+limits:
+  maxVClustersPerUser: 3
+  tokenDefaultTTL: 720h
+  tokenMaxTTL: 2160h
+
+# ---- 节点预约 ----
+booking:
+  # 终态（已结束 / 已拒绝 / 已撤销）的预约保留多久后删除
+  retention: 168h
+
+# ---- 应用目录 ----
+# 用户可在建集群时勾选、或在集群「应用」Tab 安装的 Helm chart（设计文档 2026-10-25 应用目录）。
+# 每项渲染成一个集群级 AddonTemplate；也可以直接 kubectl apply AddonTemplate，两者等价。
+# 安装由 vk8s-system 里跑平台镜像（内置 helm）的 Job 完成。
+addons:
+  job:
+    timeout: 10m
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+      limits: {cpu: "1", memory: 512Mi}
+  catalog: []
+  # 示例（取消注释并按实际仓库改地址）：
+  # catalog:
+  #   - name: devpods
+  #     spec:
+  #       displayName: DevPods
+  #       description: 通过 ssh 使用的远程开发环境
+  #       chart: {repository: "oci://harbor.example.com/library/charts", name: devpod, version: 0.1.0}   # 先 helm push 一份到这里
+  #       namespace: devpod-system
+  #       release: devpod
+  #       values: |
+  #         gateway: {service: {type: LoadBalancer}}
+  #       requires: {podSecurity: privileged}
+  #       generate:
+  #         - {secret: {namespace: devpod-system, name: devpod-gateway-host-key}, kind: sshKeyPair}
+  #         - {secret: {namespace: devpod-system, name: devpod-gateway-internal-key}, kind: sshKeyPair}
+  #       outputs:
+  #         - {name: ssh, label: SSH 网关, kind: service, service: {namespace: devpod-system, name: devpod-gateway, port: 22}}
+  #   - name: grafana
+  #     spec:
+  #       displayName: Grafana
+  #       description: 指标看板
+  #       chart: {repository: "oci://ghcr.io/grafana/helm-charts", name: grafana, version: 10.5.15}
+  #       namespace: grafana
+  #       release: grafana
+  #       values: |
+  #         admin: {existingSecret: grafana-admin, userKey: user, passwordKey: password}
+  #         service: {type: LoadBalancer}
+  #       generate:
+  #         - {secret: {namespace: grafana, name: grafana-admin}, kind: password}
+  #       outputs:
+  #         - {name: web, label: Web, kind: service, service: {namespace: grafana, name: grafana, port: 80}}
+  #         - {name: password, label: 管理员密码, kind: secret, secret: {namespace: grafana, name: grafana-admin, key: password}}
+  #   - name: prometheus
+  #     spec:
+  #       displayName: Prometheus
+  #       description: 指标采集（server + kube-state-metrics；cAdvisor 经节点代理，只含本集群容器）
+  #       chart: {repository: "oci://ghcr.io/prometheus-community/charts", name: prometheus, version: 29.38.0}
+  #       namespace: prometheus
+  #       release: prometheus
+  #       values: |
+  #         alertmanager: {enabled: false}
+  #         prometheus-node-exporter: {enabled: false}
+  #         prometheus-pushgateway: {enabled: false}
+  #         server: {service: {type: LoadBalancer}}
+  #         scrapeConfigs:
+  #           kubernetes-nodes: {enabled: false}
+  #           kubernetes-nodes-cadvisor:
+  #             relabel_configs:
+  #               - {action: labelmap, regex: __meta_kubernetes_node_label_(.+)}
+  #               - {target_label: __address__, replacement: "kubernetes.default.svc:443"}
+  #               - {source_labels: [__meta_kubernetes_node_name], regex: (.+), target_label: __metrics_path__, replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor}
+  #         # 节点代理要 nodes/proxy（chart 自带的 ClusterRole 只有 nodes/metrics）
+  #         extraManifests:
+  #           - |
+  #             apiVersion: rbac.authorization.k8s.io/v1
+  #             kind: ClusterRole
+  #             metadata: {name: prometheus-nodes-proxy}
+  #             rules: [{apiGroups: [""], resources: ["nodes/proxy"], verbs: ["get"]}]
+  #           - |
+  #             apiVersion: rbac.authorization.k8s.io/v1
+  #             kind: ClusterRoleBinding
+  #             metadata: {name: prometheus-nodes-proxy}
+  #             roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: prometheus-nodes-proxy}
+  #             subjects: [{kind: ServiceAccount, name: prometheus-server, namespace: prometheus}]
+  #       outputs:
+  #         - {name: web, label: Web, kind: service, service: {namespace: prometheus, name: prometheus-server, port: 80}}
+
+# ---- 审计 ----
+# 开启后：每个虚拟 apiserver 把审计事件（策略见 internal/audit/policy/policy.yaml）经 manager 写进 ClickHouse，
+# manager API 的变更操作与登录也记录。开启或关闭会给各集群的证书 Secret 增删一个 key，触发控制平面滚动重启一次。
+audit:
+  enabled: false
+  # ClickHouse TTL（天）
+  retentionDays: 365
+  clickhouse:
+    # true：chart 部署一个单副本 ClickHouse（开发 / e2e 用）；生产请接外部实例并填 url
+    deploy: false
+    # 空且 deploy=true 时取 http://vk8s-clickhouse.<namespace>.svc:8123
+    url: ""
+    database: vk8s_audit
+    username: vk8s
+    # 含 key password 的 Secret 名（同 namespace）；deploy=true 且为空时自动生成 vk8s-clickhouse；deploy=false 时必填
+    existingSecret: ""
+    # 以下只在 deploy=true 时使用
+    image: clickhouse/clickhouse-server:25.3
+    storageSize: 20Gi
+    storageClassName: ""
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
+
+# ---- 用户建集群时的默认值与上限（admin 可覆盖） ----
+defaults:
+  quota:
+    cpu: "16"
+    memory: 64Gi
+    pods: 50
+    storage: 200Gi
+    services: 20
+    extended: {}
+  maxQuota:
+    cpu: "256"
+    memory: 2Ti
+    pods: 500
+    storage: 10Ti
+    services: 200
+    extended:
+      nvidia.com/gpu: "32"
+  # privileged | baseline | restricted
+  podSecurity: privileged
+  nodePlacement:
+    nodeSelector: {}
+    nodeNames: []
+    tolerations: []
+  controlPlane:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+    storageSize: 5Gi
+    storageClassName: ""
+
+# 控制平面 pod 自身落在哪些节点
+controlPlanePlacement:
+  nodeSelector: {}
+  tolerations: []
+
+# UI 下拉的填表捷径；CRD 存展开后的字段
+nodePlacementPresets: []
+#  - name: dev-pool-a
+#    nodeSelector:
+#      vk8s.io/pool: dev-a
+#    tolerations:
+#      - key: vk8s.io/pool
+#        operator: Equal
+#        value: dev-a
+#        effect: NoSchedule
+
+# 写进每个租户 ns 的 LimitRange
+limitRange:
+  defaultRequest:
+    cpu: 100m
+    memory: 128Mi
+  default:
+    cpu: "1"
+    memory: 1Gi
+
+# ---- 用户 Ingress 的泛证书 ----
+# 启用后 manager 把 <Release ns>/<secretName> 复制进每个租户 ns，用户未写 tls 时自动补上。
+# 证书本身由管理员或 cert-manager 提供，chart 不创建。
+appsTLS:
+  enabled: false
+  secretName: apps-wildcard-tls
+
+# ---- manager ----
+manager:
+  replicas: 1
+  extraArgs: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # 探针路径（manager 在 8080 提供）
+  probes:
+    livenessPath: /healthz
+    readinessPath: /readyz
+  service:
+    type: ClusterIP
+    annotations: {}
+  ingress:
+    enabled: true
+    className: nginx
+    annotations: {}
+    # 空 = console.<apiDomain>
+    host: ""
+    tls:
+      enabled: true
+      # 已有 TLS Secret；配合 cert-manager 时在 annotations 里加 issuer 注解即可
+      secretName: vk8s-console-tls
+
+# ---- gateway ----
+gateway:
+  replicas: 2
+  # 容器内监听端口；非 root 绑定 443 依赖 pod sysctl net.ipv4.ip_unprivileged_port_start=0
+  listenPort: 443
+  healthPort: 8081
+  idleTimeout: 1h
+  extraArgs: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  service:
+    type: LoadBalancer
+    annotations: {}
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    # Local 可保留客户端源 IP
+    externalTrafficPolicy: Cluster
+    # type=NodePort 时使用
+    nodePort: null
+
+# ---- 通用 ----
+rbac:
+  create: true
+serviceAccount:
+  manager:
+    name: vk8s-manager
+    annotations: {}
+  gateway:
+    name: vk8s-gateway
+    annotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# 附加到所有对象的 labels / annotations
+commonLabels: {}
+commonAnnotations: {}

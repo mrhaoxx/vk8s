@@ -1,0 +1,162 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "vk8s.managerServiceAccount" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+  {{- with .Values.serviceAccount.manager.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- if .Values.rbac.create }}
+---
+# manager = Web/API + operator：管理平台 CRD，并在每个租户 ns 内创建控制平面的全部对象。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vk8s-manager
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+rules:
+  # 平台 CRD 全部读写（含 status 与 finalizers）
+  - apiGroups: ["vk8s.io"]
+    resources:
+      - users
+      - users/status
+      - virtualclusters
+      - virtualclusters/status
+      - virtualclusters/finalizers
+      - accesstokens
+      - nodebookings
+      - nodebookings/status
+      - addontemplates
+      - addoninstalls
+      - addoninstalls/status
+      - addoninstalls/finalizers
+    verbs: ["*"]
+  # 租户 ns 与其中的平台对象
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - resourcequotas
+      - limitranges
+      - services
+      - secrets
+      - configmaps
+      - serviceaccounts
+      - persistentvolumeclaims
+      - events
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - namespaces/finalize
+    verbs: ["update"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - networkpolicies
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources:
+      - statefulsets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # 为 syncer 创建 Role/ClusterRole 及绑定；其中包含 manager 自身没有的权限（pods/exec 等），需要 escalate/bind
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+      - rolebindings
+      - clusterroles
+      - clusterrolebindings
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+      - clusterroles
+    verbs: ["bind", "escalate"]
+  # 虚拟集群的 cAdvisor / resource 指标：经宿主 apiserver 的节点代理读 kubelet（manager 按集群过滤后转给 syncer）
+  - apiGroups: [""]
+    resources: ["nodes/proxy"]
+    verbs: ["get"]
+  # 只读：控制平面 pod 状态、可预约影响统计（pods）、Service CIDR 探测
+  - apiGroups: [""]
+    resources:
+      - pods
+      - endpoints
+    verbs: ["get", "list", "watch"]
+  # 节点：读（填 nodePlacement、校验 nodeNames）+ patch（节点预约的 vk8s.io/bookable 标签）
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - storageclasses
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - servicecidrs
+    verbs: ["get", "list", "watch"]
+  # leader election
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["", "events.k8s.io"]
+    resources:
+      - events
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vk8s-manager
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vk8s-manager
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vk8s.managerServiceAccount" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.rbac.create }}
+---
+# 应用目录：manager 在 vk8s-system 里为每次安装 / 升级 / 卸载建 Job，并读 Job Pod 的日志
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vk8s-manager-addons
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vk8s-manager-addons
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vk8s-manager-addons
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vk8s.managerServiceAccount" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

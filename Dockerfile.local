@@ -1,0 +1,9 @@
+# 本机开发用运行镜像：二进制由 `make image-local` 在容器内用宿主 module cache 离线编译到 bin/linux/vk8s。
+# CI 请用 Dockerfile（完整多阶段构建）。
+ARG HELM_VERSION=4.3.1
+FROM alpine/helm:${HELM_VERSION} AS helm
+FROM gcr.io/distroless/base-debian12:nonroot
+COPY bin/linux/vk8s /usr/local/bin/vk8s
+COPY --from=helm /usr/bin/helm /usr/local/bin/helm
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/vk8s"]

@@ -1,0 +1,118 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: nodebookings.vk8s.io
+spec:
+  group: vk8s.io
+  names:
+    kind: NodeBooking
+    listKind: NodeBookingList
+    plural: nodebookings
+    shortNames:
+    - nb
+    singular: nodebooking
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.node
+      name: Node
+      type: string
+    - jsonPath: .spec.vcluster
+      name: VCluster
+      type: string
+    - jsonPath: .spec.start
+      name: Start
+      type: string
+    - jsonPath: .spec.end
+      name: End
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: NodeBooking 节点预约（cluster-scoped）。ownerReference 指向目标 VirtualCluster。
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              NodeBookingSpec 一次节点预约：把宿主节点 Node 在 [Start, End) 期间租给 VCluster。
+              全部字段创建后不可变（见 NodeBooking.Spec 上的校验规则）。
+            properties:
+              end:
+                description: End 结束时刻（不含），UTC 整点，必须晚于 Start。
+                format: date-time
+                type: string
+              node:
+                description: Node 宿主节点名；必须带 vk8s.io/bookable=true 标签。
+                type: string
+              purpose:
+                description: Purpose 用途说明。
+                maxLength: 200
+                type: string
+              start:
+                description: Start 起始时刻，UTC 整点。
+                format: date-time
+                type: string
+              user:
+                description: User 创建者用户名，由 manager 按会话填写。
+                type: string
+              vcluster:
+                description: VCluster 目标 VirtualCluster 名。
+                type: string
+            required:
+            - end
+            - node
+            - start
+            - user
+            - vcluster
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable
+              rule: self == oldSelf
+          status:
+            description: NodeBookingStatus 由预约控制器写。
+            properties:
+              activatedAt:
+                description: ActivatedAt 首次进入 Active 的时刻。
+                format: date-time
+                type: string
+              message:
+                type: string
+              phase:
+                description: NodeBookingPhase 预约所处阶段。
+                type: string
+              reason:
+                type: string
+              releasedAt:
+                description: ReleasedAt 进入任一终态的时刻；保留期（booking.retention）从这里起算。
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

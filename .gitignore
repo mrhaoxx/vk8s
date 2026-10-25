@@ -1,0 +1,10 @@
+bin/
+web/node_modules/
+web/dist/
+internal/manager/ui/dist/*
+!internal/manager/ui/dist/.gitkeep
+!internal/manager/ui/dist/index.html
+.smoke/
+.superpowers/
+.worktrees/
+docs/superpowers/

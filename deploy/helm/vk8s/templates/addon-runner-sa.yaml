@@ -1,0 +1,10 @@
+# 应用目录的安装 Job 用的 ServiceAccount：不绑定任何权限，Job 只靠挂进去的虚拟集群管理 kubeconfig 工作。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vk8s-addon-runner
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: addon-runner
+automountServiceAccountToken: false

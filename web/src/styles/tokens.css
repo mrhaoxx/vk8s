@@ -1,0 +1,121 @@
+/* 设计令牌（设计文档 2026-10-24 第 2 节）。组件只引用这里的语义令牌，不写裸色值。
+ * 浅色为缺省；深色有两份相同的值：一份跟随系统（未显式选浅色时），一份由 <html data-theme="dark"> 强制。 */
+
+:root {
+  color-scheme: light;
+
+  /* 彩色色块（时间轴预约）上的文字 */
+  --on-color: #ffffff;
+
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --sunken: #f0f0ed;
+  --surface-header: #fafaf8;
+
+  --fg: #1b1d21;
+  --fg-muted: #6b6f76;
+  --fg-faint: #80848c;
+
+  --border: #e6e6e2;
+  --border-strong: #d6d6d1;
+
+  --accent: #1f3a8a;
+  --accent-fg: #ffffff;
+  --accent-soft: #e8edf8;
+
+  --danger: #9b1c1c;
+  --danger-solid: #b42318;
+  --danger-soft: #fde8e8;
+
+  --warn-fg: #7a5200;
+  --warn-soft: #fdf6e3;
+
+  --status-ok: #2f9e5a;
+  --status-busy: #d99a00;
+  --status-err: #d64545;
+  --status-idle: #9a9ea6;
+
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  --radius-sm: 4px;
+  --radius: 6px;
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    /* 彩色色块（时间轴预约）上的文字 */
+    --on-color: #ffffff;
+
+    --bg: #15161a;
+    --surface: #1b1d22;
+    --sunken: #262930;
+    --surface-header: #181a1f;
+
+    --fg: #e7e6e2;
+    --fg-muted: #9a9ea6;
+    --fg-faint: #8a8f98;
+
+    --border: #2a2d33;
+    --border-strong: #34383f;
+
+    --accent: #8aa4e8;
+    --accent-fg: #0f172a;
+    --accent-soft: #2a3550;
+
+    --danger: #f3a6a6;
+    --danger-solid: #dc2626;
+    --danger-soft: #3a1f1f;
+
+    --warn-fg: #e9c86a;
+    --warn-soft: #2a2414;
+
+    --status-ok: #3ccf7a;
+    --status-busy: #e5b02f;
+    --status-err: #ef6b6b;
+    --status-idle: #6b7078;
+
+    --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* 彩色色块（时间轴预约）上的文字 */
+  --on-color: #ffffff;
+
+  --bg: #15161a;
+  --surface: #1b1d22;
+  --sunken: #262930;
+  --surface-header: #181a1f;
+
+  --fg: #e7e6e2;
+  --fg-muted: #9a9ea6;
+  --fg-faint: #8a8f98;
+
+  --border: #2a2d33;
+  --border-strong: #34383f;
+
+  --accent: #8aa4e8;
+  --accent-fg: #0f172a;
+  --accent-soft: #2a3550;
+
+  --danger: #f3a6a6;
+  --danger-solid: #dc2626;
+  --danger-soft: #3a1f1f;
+
+  --warn-fg: #e9c86a;
+  --warn-soft: #2a2414;
+
+  --status-ok: #3ccf7a;
+  --status-busy: #e5b02f;
+  --status-err: #ef6b6b;
+  --status-idle: #6b7078;
+
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
+}

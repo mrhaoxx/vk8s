@@ -1,0 +1,35 @@
+{{- if .Values.manager.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vk8s-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+  {{- with .Values.manager.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.manager.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.manager.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ include "vk8s.consoleHost" . }}
+      secretName: {{ .Values.manager.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ include "vk8s.consoleHost" . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vk8s-manager
+                port:
+                  name: http
+{{- end }}

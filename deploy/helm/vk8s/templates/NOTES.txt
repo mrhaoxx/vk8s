@@ -1,0 +1,64 @@
+vk8s {{ .Chart.AppVersion }} 已安装到 namespace {{ .Release.Namespace }}。
+
+1. DNS 记录（安装后必须完成）
+
+   取 gateway 的 LoadBalancer 地址：
+     kubectl -n {{ .Release.Namespace }} get svc vk8s-gateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}'
+   取宿主 Ingress Controller 的 LoadBalancer 地址（例如 ingress-nginx）：
+     kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}'
+
+   然后添加：
+     *.{{ .Values.apiDomain }}            A/CNAME  → gateway 的 LB 地址        （kubectl 流量，L4 SNI 透传）
+     {{ include "vk8s.consoleHost" . }}   A/CNAME  → Ingress Controller 的 LB 地址（Web UI / API；具体记录优先于泛记录）
+     *.{{ .Values.appsDomain }}           A/CNAME  → Ingress Controller 的 LB 地址（用户工作负载）
+
+2. 首次登录
+
+{{- if .Values.auth.bootstrapAdmin.enabled }}
+   管理员用户名：{{ .Values.auth.bootstrapAdmin.username }}
+   密码：
+     kubectl -n {{ .Release.Namespace }} get secret {{ include "vk8s.bootstrapAdminSecretName" . }} -o jsonpath='{.data.password}' | base64 -d; echo
+   地址：{{ include "vk8s.publicURL" . }}
+{{- else }}
+   未启用 bootstrapAdmin；请通过 OIDC 登录后，由已有管理员提升角色，或直接创建 User 对象：
+     kubectl apply -f - <<EOF
+     apiVersion: vk8s.io/v1alpha1
+     kind: User
+     metadata: {name: admin}
+     spec: {role: admin, auth: {static: {passwordSecretRef: {name: user-admin}}}}
+     EOF
+{{- end }}
+{{- if .Values.auth.oidc.enabled }}
+   OIDC 已启用：issuer={{ .Values.auth.oidc.issuer }}，回调地址 {{ include "vk8s.publicURL" . }}/auth/oidc/callback
+   请在 IdP 中登记该回调地址。
+{{- end }}
+
+3. 建集群与下载 kubeconfig
+
+   登录 Web UI → 「我的集群」→ 新建 → 等待 Running → 「下载 kubeconfig」。
+   或者命令行：
+     kubectl get virtualclusters
+     kubectl get vc <name> -o jsonpath='{.status.phase}'
+
+4. CRD 升级提醒
+
+   crds/ 目录中的 CRD 只在 helm install 时安装；helm upgrade 不会更新它们。升级 chart 时请先：
+     kubectl apply -f deploy/helm/vk8s/crds/
+
+{{- if not .Values.appsTLS.enabled }}
+
+5. 提示：appsTLS 未启用，用户 Ingress 不会自动获得 TLS。
+   准备好 *.{{ .Values.appsDomain }} 的泛证书 Secret 后设置 --set appsTLS.enabled=true --set appsTLS.secretName=<secret>。
+{{- end }}
+
+{{- if .Values.audit.enabled }}
+
+3. 审计
+
+   审计已开启：虚拟集群内的每个请求与平台上的管理操作都会写进 ClickHouse（{{ include "vk8s.clickhouseURL" . }}，库 {{ .Values.audit.clickhouse.database }}，保留 {{ .Values.audit.retentionDays }} 天）。
+   管理员在控制台「审计」页查询；集群所有者与成员在集群详情的「审计」Tab 查看自己的集群。
+   注意：开启或关闭审计会给每个虚拟集群的证书 Secret 增删一个 key，各控制平面会滚动重启一次。
+{{- if .Values.audit.clickhouse.deploy }}
+   chart 部署了单副本 ClickHouse（vk8s-clickhouse），只适合开发与测试；生产请填 audit.clickhouse.url 与 audit.clickhouse.existingSecret 接外部实例。
+{{- end }}
+{{- end }}

@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vk8s-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+  {{- include "vk8s.annotations" . | nindent 2 }}
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "vk8s.selectorLabels" (dict "component" "gateway" "root" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vk8s.selectorLabels" (dict "component" "gateway" "root" .) | nindent 8 }}
+        {{- with .Values.commonLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.commonAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "vk8s.gatewayServiceAccount" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # 优雅停止：先停止接受新连接，等待现有连接结束（gateway --shutdown-grace 默认 30s）
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- if lt (int .Values.gateway.listenPort) 1024 }}
+        # 非 root 绑定 <1024 端口：该 sysctl 属于 kubelet 默认允许的 safe sysctl（k8s >= 1.22）
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+        {{- end }}
+      containers:
+        - name: gateway
+          image: {{ include "vk8s.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - gateway
+            - --listen=:{{ .Values.gateway.listenPort }}
+            - --health-listen=:{{ .Values.gateway.healthPort }}
+            - --api-domain={{ required "apiDomain is required" .Values.apiDomain }}
+            - --idle-timeout={{ .Values.gateway.idleTimeout }}
+            {{- range .Values.gateway.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          ports:
+            - name: tls
+              containerPort: {{ .Values.gateway.listenPort }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.gateway.healthPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+      {{- with .Values.gateway.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.gateway.affinity }}
+      affinity:
+        {{- toYaml .Values.gateway.affinity | nindent 8 }}
+      {{- else }}
+      # 默认：两个副本尽量分散到不同节点
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "vk8s.selectorLabels" (dict "component" "gateway" "root" .) | nindent 20 }}
+      {{- end }}

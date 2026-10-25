@@ -1,0 +1,69 @@
+{{- if and .Values.audit.enabled .Values.audit.clickhouse.deploy }}
+{{- /* 单副本 ClickHouse：开发与 e2e 用；生产接外部实例。 */ -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vk8s-clickhouse
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vk8s.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  serviceName: vk8s-clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "vk8s.selectorLabels" (dict "component" "clickhouse" "root" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vk8s.selectorLabels" (dict "component" "clickhouse" "root" .) | nindent 8 }}
+    spec:
+      securityContext:
+        fsGroup: 101
+      containers:
+        - name: clickhouse
+          image: {{ .Values.audit.clickhouse.image }}
+          env:
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.audit.clickhouse.username | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "vk8s.clickhouseSecretName" . }}
+                  key: password
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "0"
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: native
+              containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.audit.clickhouse.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.audit.clickhouse.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.audit.clickhouse.storageSize }}
+{{- end }}

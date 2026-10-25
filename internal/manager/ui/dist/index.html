@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>vk8s 控制台</title>
+    <!-- 在样式生效前应用用户显式选择的主题，避免覆盖主题的用户每次刷新先闪一下系统主题。键与取值见 src/theme/ThemeContext.tsx。 -->
+    <script>
+      try {
+        var t = localStorage.getItem('vk8s.theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/assets/index-CsY3xfcW.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BO7vFWPp.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
